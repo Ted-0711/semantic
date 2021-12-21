@@ -1,4 +1,4 @@
-# parser
+# semantic
 
 ## Project setup
 ```
