@@ -81,10 +81,8 @@ class Grammar {
 		this.getFirstOfNonTrm();
 	}
 	readGrammar(grammarFileContent) {
-		// 加入EndToken #
 		this.syms.push(new GrammarSym(SymType.End, this.EndToken));
 		this.trms.push(this.syms.length - 1);
-		// 加入EpsilonToken @
 		this.syms.push(
 			new GrammarSym(SymType.Epsilon, this.EpsilonToken)
 		);
@@ -93,8 +91,6 @@ class Grammar {
 
 		while (pointer < grammarFileContent.length) {
 			line = "";
-
-			// 读入一行
 			while (
 				pointer < grammarFileContent.length &&
 				grammarFileContent[pointer] != "\r" &&
@@ -103,7 +99,6 @@ class Grammar {
 				line += grammarFileContent[pointer];
 				pointer++;
 			}
-
 			while (
 				pointer < grammarFileContent.length &&
 				(grammarFileContent[pointer] == "\r" ||
@@ -112,13 +107,9 @@ class Grammar {
 				pointer++;
 			}
 			grammarRowNum++;
-
-			// 处理最开始和末尾的空格和注释
 			if (line.indexOf("$") != -1) line = line.slice(0, line.indexOf("$"));
 			line = line.trim();
 			if (line.length == 0) continue;
-
-			// 将产生式分为左右两个部分
 			let prodLeftAndRight = line.split(this.ProToken);
 			if (prodLeftAndRight.length != 2) {
 				errString =
@@ -129,13 +120,8 @@ class Grammar {
 					'"符号）';
 				throw err_code.GRAMMAR_ERROR;
 			}
-
 			let prodLeft = prodLeftAndRight[0].trim(),
-				prodRight = prodLeftAndRight[1].trim();
-
-			// 左边部分的index
-			let leftSym = -1;
-			// 如果不是声明所有非终结符
+				prodRight = prodLeftAndRight[1].trim(), leftSym = -1;
 			if (prodLeft != this.TrmToken) {
 				leftSym = this.findSymIndexByToken(prodLeft);
 				if (leftSym == -1) {
@@ -146,9 +132,6 @@ class Grammar {
 					this.nonTrms.push(leftSym);
 				}
 			}
-			//此时如果是声明所有非终结符的grammar，则leftSym=-1
-
-			// 右边部分以“|”为界限分解
 			let prodRightParts = split_postproc(prodRight.split("|"));
 			if (prodRightParts.length == 0) {
 				errString =
@@ -158,16 +141,13 @@ class Grammar {
 				console.log('t1', errString);
 				throw err_code.GRAMMAR_ERROR;
 			}
-
 			for (let i = 0; i < prodRightParts.length; i++) {
-				// 如果是终结符声明
 				if (leftSym == -1) {
 					this.syms.push(
 						new GrammarSym(SymType.Trm, prodRightParts[i])
 					);
 					this.trms.push(this.syms.length - 1);
 				} else {
-					// 将每一个产生式中的每个符号分解
 					let rightSym = [], rightSymStr = split_postproc(
 						prodRightParts[i].split(/\s/)
 					);
@@ -184,9 +164,7 @@ class Grammar {
 						}
 						rightSym.push(presentRightSym);
 					}
-					// 加入prod中
 					this.prods.push(new GrammarItem(leftSym, rightSym));
-					// 如果是起始产生式
 					if (this.syms[leftSym].token == this.ExtStartToken)
 						this.startProd = this.prods.length - 1;
 				}
@@ -203,23 +181,15 @@ class Grammar {
 		return -1;
 	}
 	getFirstOfNonTrm() {
-		// 不断进行标记，直到所有集合不发生变化
 		let changed;
 		// eslint-disable-next-line no-constant-condition
 		while (true) {
 			changed = false;
-			// 遍历所有非终结符
 			for (let i = 0; i < this.nonTrms.length; i++) {
-				// 遍历所有产生式
 				for (let j = 0; j < this.prods.length; j++) {
-					// 如果左边不为nonTrm则continue
 					if (this.prods[j].leftSym != this.nonTrms[i])
 						continue;
-
-					// 找到对应产生式，遍历产生式右部
 					let it = 0;
-
-					// 是终结符或空串则直接加入first集合并退出
 					if (
 						this.trms.indexOf(this.prods[j].rightSym[it]) !=
 						-1 ||
@@ -238,10 +208,8 @@ class Grammar {
 						}
 						continue;
 					}
-					// 右部以非终结符开始
 					let flag = true;
 					for (; it < this.prods[j].rightSym.length; ++it) {
-						// 如果是终结符，停止迭代
 						if (
 							this.trms.indexOf(this.prods[j].rightSym[it]) != -1
 						) {
@@ -255,7 +223,6 @@ class Grammar {
 							flag = false;
 							break;
 						}
-
 						changed =
 							changed ||
 							this.mergeSetExceptEmpty(
@@ -263,8 +230,6 @@ class Grammar {
 								this.syms[this.prods[j].rightSym[it]].firstSet,
 								this.findSymIndexByToken(this.EpsilonToken)
 							);
-
-						// 若该非终结符可导出空串，则继续迭代
 						flag =
 							flag &&
 							this.syms[this.prods[j].rightSym[it]].firstSet.indexOf(
@@ -272,7 +237,6 @@ class Grammar {
 							) != -1;
 						if (!flag) break;
 					}
-					// 如果该产生式的所有右部均为非终结符且均可导出空串，则将空串加入First集合
 					if (flag && it == this.prods[j].rightSym.length) {
 						if (
 							this.syms[this.nonTrms[i]].firstSet.indexOf(
@@ -290,19 +254,14 @@ class Grammar {
 			if (!changed) break;
 		}
 	}
-	// 返回一个符号串的First集
 	getFirstOfString(str) {
-		// First集
 		let firstSet = [];
-		// str为空直接返回
 		if (str.length == 0) {
 			return firstSet;
 		}
-		// epsilonIn用于判断空串是否需要加入
 		let epsilonIn = true;
 
 		for (let it = 0; it < str.length; it++) {
-			// 如果是非终结符
 			if (this.syms[str[it]].type == SymType.Trm) {
 				this.mergeSetExceptEmpty(
 					firstSet,
@@ -312,19 +271,16 @@ class Grammar {
 				epsilonIn = false;
 				break;
 			}
-			// 是空串
 			if (this.syms[str[it]].type == SymType.Epsilon) {
 				firstSet.push(str[it]);
 				epsilonIn = false;
 				break;
 			}
-			// 非终结符，合并First集合
 			this.mergeSetExceptEmpty(
 				firstSet,
 				this.syms[str[it]].firstSet,
 				this.findSymIndexByToken(this.EpsilonToken)
 			);
-			// 如果当前非终结符可以导出空串，则继续循环
 			epsilonIn =
 				epsilonIn &&
 				this.syms[str[it]].firstSet.indexOf(
@@ -332,12 +288,10 @@ class Grammar {
 				) != -1;
 			if (!epsilonIn) break;
 		}
-		// 如果所有的都可以产生空串，first集加入空串
 		if (epsilonIn)
 			firstSet.push(this.findSymIndexByToken(this.EpsilonToken));
 		return firstSet;
 	}
-	// 将非空src集插入dex（用于First集和Follow集的扩大
 	mergeSetExceptEmpty(des, src, epsilonIndex) {
 		let changed = false;
 		for (let i = 0; i < src.length; ++i) {

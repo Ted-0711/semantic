@@ -69,21 +69,13 @@ class LR1 extends Grammar {
 		if (grammarFileContent.length == 0) {
 			return;
 		}
-		// 整个项集族
 		this.lr1Cluster = [];
-		// goto信息记录表，映射关系为：{当前closure在lr1Cluster中的标号，当前符号在syms中标号} -> 转移到的closure在lr1Cluster中的标号
 		this.gotoInfo = new Map();
-		// GOTO表，GOTO[i,A]=j，只用到Action Error(表示未定义)和ShiftIn(表示转移)
 		this.gotoTable = new Map();
-		//ACTION表，ACTION[i, A] = "移入/规约/接受"
 		this.actionTable = new Map();
-		// 语义分析器
 		this.semanticAnalysis = new SemanticAnalysis();
-		// 语法树节点列表
 		this.nodeList = [];
-		// 生成LR1项集，存储在lr1Closure中
 		this.genCluster();
-		// 生成Table
 		this.genTable();
 	}
 	// 生成LR1项集
@@ -92,21 +84,14 @@ class LR1 extends Grammar {
 		let initItem = new LR1Item(this.findSymIndexByToken(this.ExtStartToken), [this.findSymIndexByToken(this.StartToken)], this.startProd, 0, this.findSymIndexByToken(this.EndToken));
 		let initClosure = new LR1Closure();
 		initClosure.lr1Closure.push(initItem);
-
 		// 放进cluster中
 		this.lr1Cluster.push(this.genClosure(initClosure));
-
 		// 遍历lr1Cluster中的每一项
 		for (let i = 0; i < this.lr1Cluster.length; ++i) {
-			// 遍历所有文法符号
 			for (let s = 0; s < this.syms.length; ++s) {
-				// 只有为终结符或非终结符才进行下一步
 				if (this.syms[s].type != SymType.NonTrm && this.syms[s].type != SymType.Trm) continue;
-				// 得到输入符号s会到达的closure
 				let toClosure = this.genGOTO(this.lr1Cluster[i], s);
-				// 如果为空，则continue
 				if (toClosure.lr1Closure.length == 0) continue;
-				// 如果已经存在，则记录编号
 				let existIndex = -1;
 				for (let j = 0; j < this.lr1Cluster.length; j++) {
 					if (this.lr1Cluster[j].equal(toClosure)) {
@@ -118,7 +103,6 @@ class LR1 extends Grammar {
 				else {
 					// 不存在，则加入lr1Cluster
 					this.lr1Cluster.push(toClosure);
-					// 记录转移关系
 					this.gotoInfo.set(String(i) + " " + String(s), this.lr1Cluster.length - 1);
 				}
 			}
@@ -128,23 +112,17 @@ class LR1 extends Grammar {
 	genClosure(initClosure) {
 		for (let i = 0; i < initClosure.lr1Closure.length; ++i) {
 			let presentLr1Item = initClosure.lr1Closure[i];
-			// ·在最后一个位置，则其后继没有非终结符
 			if (presentLr1Item.dotPos >= presentLr1Item.rightSym.length) continue;
-			// ·后的符号
 			let nextSymIndex = presentLr1Item.rightSym[presentLr1Item.dotPos], nextSym = this.syms[nextSymIndex];
-			// 如果·后的符号为终结符
 			if (nextSym.type == SymType.Trm) continue;
-			// 如果·后的符号为ε，则 -> ·ε 直接变为 -> ε·
 			if (nextSym.type == SymType.Epsilon) {
 				initClosure.lr1Closure.dotPos++;
 				continue;
 			}
 			// 其他情况，·后符号为非终结符
-			// 得到first集（A->α·Bβ, a 则求βa的first集）
 			let BetaA = presentLr1Item.rightSym.slice(presentLr1Item.dotPos + 1, presentLr1Item.rightSym.length);
 			BetaA.push(presentLr1Item.lookAHDSym);
 			let BetaAFirstSet = this.getFirstOfString(BetaA);
-			// 查找以nextSymIndex开始的prod
 			for (let j = 0; j < this.prods.length; ++j) {
 				let presentProd = this.prods[j];
 				if (presentProd.leftSym != nextSymIndex) continue;
@@ -153,7 +131,6 @@ class LR1 extends Grammar {
 					let tmp = 0;
 					// 如果是ε产生式，则直接加入->ε·项，从而不引出ε转移边
 					if (this.syms[presentProd.rightSym[0]].type == SymType.Epsilon) {
-						// 确保当前不含这一项再加入
 						for (tmp = 0; tmp < initClosure.lr1Closure.length; ++tmp) {
 							if (initClosure.lr1Closure[tmp].equal(new LR1Item(presentProd.leftSym, presentProd.rightSym, j, 1, BetaAFirstSet[it]))) break;
 						}
@@ -161,7 +138,6 @@ class LR1 extends Grammar {
 							initClosure.lr1Closure.push(new LR1Item(presentProd.leftSym, presentProd.rightSym, j, 1, BetaAFirstSet[it]));
 					}
 					else {
-						// 确保当前不含这一项再加入
 						for (tmp = 0; tmp < initClosure.lr1Closure.length; ++tmp) {
 							if (initClosure.lr1Closure[tmp].equal(new LR1Item(presentProd.leftSym, presentProd.rightSym, j, 0, BetaAFirstSet[it]))) break;
 						}
@@ -180,13 +156,10 @@ class LR1 extends Grammar {
 		if (this.syms[presentSym].type != SymType.NonTrm && this.syms[presentSym].type != SymType.Trm)
 			return toClosure;
 		for (let lr1ItemIt = 0; lr1ItemIt < fromClosure.lr1Closure.length; ++lr1ItemIt) {
-			// 如果dot在最后
 			if (fromClosure.lr1Closure[lr1ItemIt].dotPos >= fromClosure.lr1Closure[lr1ItemIt].rightSym.length)
 				continue;
-			// 如果后面一个字符不是presentSym
 			if (fromClosure.lr1Closure[lr1ItemIt].rightSym[fromClosure.lr1Closure[lr1ItemIt].dotPos] != presentSym)
 				continue;
-			// 后面一个字符就是presentSym
 			toClosure.lr1Closure.push(new LR1Item(fromClosure.lr1Closure[lr1ItemIt].leftSym, fromClosure.lr1Closure[lr1ItemIt].rightSym, fromClosure.lr1Closure[lr1ItemIt].index, fromClosure.lr1Closure[lr1ItemIt].dotPos + 1, fromClosure.lr1Closure[lr1ItemIt].lookAHDSym));
 		}
 		return this.genClosure(toClosure);
@@ -203,34 +176,27 @@ class LR1 extends Grammar {
 		// 定义符号栈 状态栈  记录步骤 树节点
 		let symStack = [], statusStack = [], step = 1, tmpStack = [];
 
-		// 用于输出的格式化
-		// let step_len = 5, status_len = 200, sym_len = 300, input_len = 200, prod_len = 60;
-		// 输出一行的函数
 		let print_line = (i, prodIndex) => {
 			// 输出第几步
 			tmpArray.push(step++);
-			// outString += times(" ", step_len - String(step).length) + String(step++);
 			// 状态栈的string
 			let statusStackStr = "";
 			for (let status = 0; status < statusStack.length; ++status) {
 				statusStackStr += " " + String(statusStack[status]);
 			}
 			tmpArray.push(statusStackStr);
-			// outString += times(" ", status_len - statusStackStr.length) + statusStackStr;
 			// 符号栈的string
 			let symStackStr = "";
 			for (let sym = 0; sym < symStack.length; ++sym) {
 				symStackStr += "(" + String(symStack[sym]) + "," + this.syms[symStack[sym]].token + ")";
 			}
 			tmpArray.push(symStackStr);
-			// outString += times(" ", sym_len - symStackStr.length) + symStackStr;
 			// 输入串的string
 			let inputStr = "";
 			for (let token = i; token < tokenStream.length; ++token) {
 				inputStr += tokenStream[token].type;
 			}
 			tmpArray.push(inputStr);
-			// outString += times(" ", input_len - inputStr.length) + inputStr;
 			// 产生式的string
 			if (prodIndex != -1) {
 				let prodStr = "";
@@ -240,25 +206,16 @@ class LR1 extends Grammar {
 					prodStr += this.syms[this.prods[prodIndex].rightSym[prodRightSym]].token + " ";
 				}
 				tmpArray.push(prodStr);
-				// outString += times(" ", prod_len - prodStr.length) + prodStr;
 			}
 			parseArray.push(tmpArray);
 			tmpArray = [];
-			// outString += "\n";
 		};
-
-		// 输出
-		// outString += times(" ", step_len - 4) + "步骤" + times(" ", status_len - 4) + "状态" + times(" ", sym_len - 4) + "符号" + times(" ", input_len - 4) + "输入串" + times(" ", prod_len - 6) + "产生式" + "\n";
-
 		this.semanticAnalysis.AddSymToList(new SemanticSym(this.StartToken, "", -1, -1, -1, -1));
-
 		// 初始化栈
 		symStack.push(this.findSymIndexByToken(this.EndToken));
 		statusStack.push(0);
-
 		// 输出
 		print_line(0, -1);
-
 		// 对tokenStream中的每一个符号进行遍历
 		for (let i = 0; i < tokenStream.length; ++i) {
 			let cur_state = statusStack[statusStack.length - 1], curTokenIndex = this.findSymIndexByToken(tokenStream[i].type);
@@ -346,11 +303,8 @@ class LR1 extends Grammar {
 						// 空串
 						this.nodeList[tmp - 1].children.splice(0, 0, { name: "@" })
 					}
-
-					// 此时i不加1
 					--i;
 
-					// 进行语义分析
 					let prodRight = [];
 					for (let s = 0; s < prod.rightSym.length; ++s) {
 						prodRight.push(this.syms[prod.rightSym[s]].token);
@@ -365,7 +319,6 @@ class LR1 extends Grammar {
 					tmpArray.push("acc!");
 					parseArray.push(tmpArray);
 					tmpArray = [];
-					// outString += times(" ", step_len - String(step).length) + String(step++) + times(" ", status_len - 4) + "acc!\n";
 					return parseArray;
 				}
 				// 错误
@@ -442,12 +395,10 @@ class LR1 extends Grammar {
 				let presentLr1Item = this.lr1Cluster[closureIndex].lr1Closure[lr1ItemIndex];
 				// 如果·已在末尾
 				if (presentLr1Item.dotPos >= presentLr1Item.rightSym.length) {
-					// 如果不为扩展开始符号，则进行规约
 					console.log("this.syms: ", this.syms);
 					console.log("presentLr1Item.leftSym", presentLr1Item.leftSym);
 					console.log("this.syms[presentLr1Item.leftSym]", this.syms[presentLr1Item.leftSym]);
 					if (this.syms[presentLr1Item.leftSym].token != this.ExtStartToken) {
-						// 如果不为扩展开始符号，则进行规约
 						this.actionTable.set(String(closureIndex) + " " + String(presentLr1Item.lookAHDSym), new ActionInfo(Action.Reduce, presentLr1Item.index));
 					}
 					else {
@@ -460,18 +411,14 @@ class LR1 extends Grammar {
 					let nextSym = presentLr1Item.rightSym[presentLr1Item.dotPos];
 					// 如果不是终结符，则在goto表中标出
 					if (this.syms[nextSym].type == SymType.NonTrm) {
-						// 在goto表中寻找
 						let it = this.gotoInfo.get(String(closureIndex) + " " + String(nextSym));
-						// 如果找到，进行移进
 						if (it != undefined) {
 							this.gotoTable.set(String(closureIndex) + " " + String(nextSym), new ActionInfo(Action.ShiftIn, it));
 						}
 					}
 					// 否则在action表中标出
 					else if (this.syms[nextSym].type == SymType.Trm) {
-						// 在goto表中寻找
 						let it = this.gotoInfo.get(String(closureIndex) + " " + String(nextSym));
-						// 如果找到，进行移进
 						if (it != undefined) {
 							this.actionTable.set(String(closureIndex) + " " + String(nextSym), new ActionInfo(Action.ShiftIn, it));
 						}
